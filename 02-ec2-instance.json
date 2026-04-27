@@ -1,0 +1,85 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Reusable EC2 template that consumes VPC/Subnet/SecurityGroup outputs.",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "AllowedValues": ["t2.micro", "t3.micro", "t3.small", "t3.medium"]
+    },
+    "KeyPairName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Description": "Existing EC2 key pair name for SSH."
+    },
+    "EnvironmentExportPrefix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Prefix used in exported names from the network stack."
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+    }
+  },
+  "Resources": {
+    "WebServerInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": { "Ref": "LatestAmiId" },
+        "InstanceType": { "Ref": "InstanceType" },
+        "KeyName": { "Ref": "KeyPairName" },
+        "SubnetId": {
+          "Fn::ImportValue": {
+            "Fn::Sub": "${EnvironmentExportPrefix}-PublicSubnetId"
+          }
+        },
+        "SecurityGroupIds": [
+          {
+            "Fn::ImportValue": {
+              "Fn::Sub": "${EnvironmentExportPrefix}-WebSecurityGroupId"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-web-server" }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum update -y\n",
+                "dnf install -y httpd\n",
+                "systemctl enable httpd\n",
+                "systemctl start httpd\n",
+                "echo \"<h1>CloudFormation EC2 Demo - ",
+                { "Ref": "EnvironmentName" },
+                "</h1>\" > /var/www/html/index.html\n"
+              ]
+            ]
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "InstanceId": {
+      "Value": { "Ref": "WebServerInstance" }
+    },
+    "PublicIp": {
+      "Value": { "Fn::GetAtt": ["WebServerInstance", "PublicIp"] }
+    },
+    "PublicDnsName": {
+      "Value": { "Fn::GetAtt": ["WebServerInstance", "PublicDnsName"] }
+    }
+  }
+}

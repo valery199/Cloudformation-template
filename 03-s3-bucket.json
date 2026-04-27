@@ -1,0 +1,62 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Reusable S3 bucket template with versioning and encryption enabled.",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$"
+    },
+    "BucketNamePrefix": {
+      "Type": "String",
+      "Default": "travel237-demo",
+      "AllowedPattern": "^[a-z0-9.-]+$",
+      "Description": "Prefix for globally-unique S3 bucket naming."
+    }
+  },
+  "Resources": {
+    "AppBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${BucketNamePrefix}-${EnvironmentName}-${AWS::AccountId}-${AWS::Region}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-app-bucket" }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "BucketName": {
+      "Value": { "Ref": "AppBucket" }
+    },
+    "BucketArn": {
+      "Value": { "Fn::GetAtt": ["AppBucket", "Arn"] }
+    },
+    "BucketDomainName": {
+      "Value": { "Fn::GetAtt": ["AppBucket", "DomainName"] }
+    }
+  }
+}

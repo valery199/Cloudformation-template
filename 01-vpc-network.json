@@ -1,0 +1,163 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Reusable VPC network stack: VPC, public subnet, private subnet, IGW, route table, security group.",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$",
+      "Description": "Name prefix used for tagging resources."
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for the VPC."
+    },
+    "PublicSubnetCidr": {
+      "Type": "String",
+      "Default": "10.0.1.0/24",
+      "Description": "CIDR block for the public subnet."
+    },
+    "PrivateSubnetCidr": {
+      "Type": "String",
+      "Default": "10.0.2.0/24",
+      "Description": "CIDR block for the private subnet."
+    },
+    "AllowedSshCidr": {
+      "Type": "String",
+      "Default": "0.0.0.0/0",
+      "Description": "CIDR allowed to SSH into EC2 instances."
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": { "Ref": "VpcCidr" },
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "${EnvironmentName}-vpc" } }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "${EnvironmentName}-igw" } }
+        ]
+      }
+    },
+    "InternetGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "InternetGatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": { "Ref": "PublicSubnetCidr" },
+        "MapPublicIpOnLaunch": true,
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "${EnvironmentName}-public-subnet" } }
+        ]
+      }
+    },
+    "PrivateSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": { "Ref": "PrivateSubnetCidr" },
+        "MapPublicIpOnLaunch": false,
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "${EnvironmentName}-private-subnet" } }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "${EnvironmentName}-public-rt" } }
+        ]
+      }
+    },
+    "DefaultPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicSubnetRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PublicSubnet" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "WebSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Reusable web security group (SSH + HTTP).",
+        "VpcId": { "Ref": "VPC" },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": { "Ref": "AllowedSshCidr" }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "FromPort": 0,
+            "ToPort": 0,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "${EnvironmentName}-web-sg" } }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VpcId": {
+      "Description": "VPC ID",
+      "Value": { "Ref": "VPC" },
+      "Export": { "Name": { "Fn::Sub": "${EnvironmentName}-VpcId" } }
+    },
+    "PublicSubnetId": {
+      "Description": "Public subnet ID",
+      "Value": { "Ref": "PublicSubnet" },
+      "Export": { "Name": { "Fn::Sub": "${EnvironmentName}-PublicSubnetId" } }
+    },
+    "PrivateSubnetId": {
+      "Description": "Private subnet ID",
+      "Value": { "Ref": "PrivateSubnet" },
+      "Export": { "Name": { "Fn::Sub": "${EnvironmentName}-PrivateSubnetId" } }
+    },
+    "WebSecurityGroupId": {
+      "Description": "Web security group ID",
+      "Value": { "Ref": "WebSecurityGroup" },
+      "Export": { "Name": { "Fn::Sub": "${EnvironmentName}-WebSecurityGroupId" } }
+    }
+  }
+}
